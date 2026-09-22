@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PC28 实时预测系统 v12</title>
+<style>
+/* ============================================================
+   全局样式(明亮主题 · 紧凑布局)
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+              "Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:#eef4fb;color:#1e293b;font-size:13px;line-height:1.45;
+  padding:10px;min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.container{max-width:1000px;margin:0 auto;}
+
+/* ---------- 顶部状态栏 ---------- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:8px;padding:10px 14px;background:#ffffff;
+  border-radius:10px;margin-bottom:10px;border:1px solid #dbe4ee;
+  box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.topbar .title{font-size:15px;font-weight:700;color:#1e3a8a;letter-spacing:.3px;}
+.topbar .title small{font-size:11px;color:#64748b;font-weight:400;margin-left:6px;}
+.topbar .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#64748b;align-items:center;}
+.topbar .meta b{color:#2563eb;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;}
+.topbar .meta .cd{color:#d97706;font-weight:700;font-family:ui-monospace,monospace;}
+.status-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#22c55e;margin-right:4px;animation:pulse 1.6s infinite;
+  vertical-align:middle;
+}
+.status-dot.err{background:#ef4444;animation:none;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:#ffffff;border-radius:10px;padding:14px 16px;margin-bottom:10px;
+  border:1px solid #dbe4ee;box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.card h2{
+  font-size:13px;font-weight:700;color:#1e293b;margin-bottom:10px;
+  padding-left:8px;border-left:3px solid #2563eb;line-height:1.3;
+}
+
+/* ---------- 表格 ---------- */
+.table-wrap{
+  overflow:auto;border:1px solid #dbe4ee;border-radius:8px;
+}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th,td{
+  padding:6px 7px;text-align:center;border-bottom:1px solid #eef2f7;
+  white-space:nowrap;vertical-align:middle;
+}
+th{
+  background:#f8fafc;color:#475569;font-weight:600;font-size:11.5px;
+  position:sticky;top:0;z-index:2;border-bottom:1.5px solid #dbe4ee;
+}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:#f8fbff;}
+
+/* 行标签列 */
+.row-label{
+  font-weight:700;font-size:12px;text-align:center;width:80px;
+}
+.row-label.latest{color:#16a34a;}
+.row-label.predict{color:#2563eb;}
+
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
+.num{font-weight:800;color:#d97706;font-family:ui-monospace,monospace;}
+
+/* ---------- 预测卡片(单框双方案) ---------- */
+.predict-box{
+  background:#f8fafc;border:1px solid #dbe4ee;border-radius:9px;padding:10px 12px;
+}
+.plan-row{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:7px 0;font-size:12px;min-height:36px;
+}
+.plan-row + .plan-row{border-top:1px dashed #dbe4ee;}
+.plan-badge{
+  font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;
+  color:#fff;flex-shrink:0;
+}
+.planA{background:#dc2626;}
+.planB{background:#2563eb;}
+.kill-label{font-size:11px;color:#94a3b8;}
+.kill-val{
+  font-size:15px;font-weight:800;color:#dc2626;letter-spacing:.5px;
+}
+.kill-val.small{font-size:13px;}
+.buy-label{font-size:11px;color:#94a3b8;margin-left:4px;}
+.buy-val{display:flex;gap:4px;flex-wrap:wrap;align-items:center;}
+.buy-val span{
+  font-size:11.5px;font-weight:700;color:#15803d;background:#dcfce7;
+  padding:2px 9px;border-radius:5px;border:1px solid #86efac;
+  line-height:1.4;
+}
+.conf{margin-left:auto;font-size:11px;color:#94a3b8;white-space:nowrap;}
+.conf b{color:#d97706;font-family:ui-monospace,monospace;font-size:12.5px;font-weight:800;}
+
+/* ---------- 按钮 ---------- */
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center;}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:6px 14px;border:none;border-radius:7px;font-size:12px;font-weight:600;
+  cursor:pointer;transition:.15s;font-family:inherit;
+}
+.btn-primary{background:#2563eb;color:#fff;}
+.btn-primary:hover{background:#1d4ed8;}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn:active:not(:disabled){transform:translateY(1px);}
+.muted{font-size:11px;color:#94a3b8;}
+
+/* ---------- 标签 ---------- */
+.tag{
+  display:inline-block;padding:1px 8px;border-radius:20px;
+  font-size:11.5px;font-weight:600;color:#fff;margin:0 1px;line-height:1.5;
+}
+.tag.g0{background:#ef4444;}
+.tag.g1{background:#3b82f6;}
+.tag.g2{background:#f59e0b;}
+.tag.g3{background:#10b981;}
+
+/* 结果对错 */
+.result-ok{color:#16a34a;font-weight:800;font-size:12.5px;}
+.result-fail{color:#dc2626;font-weight:800;font-size:12.5px;}
+
+/* ---------- 明细表 ---------- */
+tbody tr.miss td{background:#fef2f2;}
+tbody tr.miss:hover td{background:#fee2e2;}
+tbody tr.missB td{background:#eff6ff;}
+tbody tr.missB:hover td{background:#dbeafe;}
+
+/* 开奖时间：日期在上，时间在下 */
+.time-cell{line-height:1.3;}
+.time-cell .date{
+  font-size:11px;color:#334155;font-weight:600;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.time-cell .time{
+  font-size:10px;color:#94a3b8;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+/* 预测结果 / 对错 单元格：上下两行结构，保持两列对齐 */
+.pred-result{
+  display:flex;flex-direction:column;align-items:center;
+  gap:3px;line-height:1.2;
+}
+.pred-result .pred-top,
+.pred-result .pred-bottom{
+  display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;
+  min-height:18px;align-items:center;
+}
+.pred-result .tag{font-size:11px;padding:1px 6px;}
+
+/* ---------- 错误提示 ---------- */
+.err-tip{
+  display:flex;align-items:center;gap:6px;padding:8px 12px;
+  background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+  color:#b91c1c;font-size:12px;margin-bottom:10px;
+}
+.err-tip.hidden{display:none;}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar{width:7px;height:7px;}
+::-webkit-scrollbar-track{background:#f1f5f9;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8;}
+
+/* ---------- 响应式 ---------- */
+@media(max-width:640px){
+  body{font-size:12px;padding:8px;}
+  .topbar .title{font-size:13.5px;}
+  .topbar .meta{font-size:11px;gap:9px;}
+  .card{padding:11px 12px;}
+  .kill-val{font-size:13px;}
+  .conf{margin-left:0;width:100%;}
+  .plan-row{gap:6px;}
+  th,td{padding:5px 5px;font-size:11px;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ==================== 顶部状态栏 ==================== -->
+  <div class="topbar">
+    <div class="title">
+      PC28预测 bbai独家定制 <small></small>
+    </div>
+    <div class="meta">
+      <span><span class="status-dot" id="statusDot"></span>本地记忆：<b id="memCount">—</b> 期</span>
+      <span>时间：<b id="clock">—</b></span>
+      <span>倒计时：<span class="cd" id="countdown">—</span></span>
+    </div>
+  </div>
+
+  <!-- ==================== 错误提示 ==================== -->
+  <div class="err-tip hidden" id="errTip">
+    ⚠️ <span id="errMsg">接口异常，使用本地数据</span>
+  </div>
+
+  <!-- ==================== 开奖记录 + 下期预测 ==================== -->
+  <div class="card">
+    <h2>开奖与下期预测</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:80px;"></th>
+            <th>开奖时间</th>
+            <th>期号</th>
+            <th>开奖号码</th>
+            <th>和值</th>
+            <th>组合</th>
+          </tr>
+        </thead>
+        <tbody id="latestBody">
+          <tr><td colspan="6" style="color:#94a3b8;padding:14px;">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== 下期预测(单框双方案) ==================== -->
+  <div class="card">
+    <h2>下期预测 <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:6px;" id="predictIssueHint"></span></h2>
+
+    <div class="predict-box">
+      <div class="plan-row">
+        <span class="plan-badge planA">杀组</span>
+        <span class="kill-label">杀</span>
+        <span class="kill-val" id="killA">—</span>
+        <span class="buy-label">推荐</span>
+        <span class="buy-val" id="buyA"><span>—</span></span>
+        <span class="conf">置信 <b id="confA">—</b></span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-badge planB">双组</span>
+        <span class="kill-label">杀</span>
+        <span class="kill-val small" id="killB">—</span>
+        <span class="buy-label">推荐</span>
+        <span class="buy-val" id="buyB"><span>—</span></span>
+        <span class="conf">置信 <b id="confB">—</b></span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="refreshBtn">立即刷新</button>
+      <span class="muted" id="refreshHint">每 30 秒自动更新</span>
+    </div>
+  </div>
+
+  <!-- ==================== 最近 50 期明细 ==================== -->
+  <div class="card">
+    <h2>最近 50 期预测明细</h2>
+    <div class="table-wrap" style="max-height:440px;">
+      <table>
+        <thead>
+          <tr>
+            <th>开奖时间</th>
+            <th>期号</th>
+            <th>开奖号码</th>
+            <th>和值</th>
+            <th>实际组合</th>
+            <th>预测结果</th>
+            <th>对错</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody">
+          <tr><td colspan="7" style="color:#94a3b8;padding:14px;">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ==================================================================================
+   PC28 实时预测系统 v12
+   ----------------------------------------------------------------------------------
+   模块划分：
+     A. 基础常量与工具
+     B. IndexedDB 记忆库模块
+     C. 自适应集成学习模型模块
+     D. UI 渲染模块
+     E. 数据同步与轮询模块
+     F. 启动流程
+   ================================================================================== */
+
+/* ============================ A. 基础常量与工具 ============================ */
+
+const GROUP_NAMES = ['小单', '小双', '大单', '大双'];
+const GROUP_IDX = { '小单': 0, '小双': 1, '大单': 2, '大双': 3 };
+
+const SUM_COUNTS = [
+  1,3,6,10,15,21,28,36,45,55,63,69,73,75,
+  75,73,69,63,55,45,36,28,21,15,10,6,3,1
+];
+
+function groupOf(sum){
+  if (sum < 0 || sum > 27) return -1;
+  const isBig = sum >= 14;
+  const isOdd = (sum % 2) === 1;
+  if (!isBig &&  isOdd) return 0;
+  if (!isBig && !isOdd) return 1;
+  if ( isBig &&  isOdd) return 2;
+  return 3;
+}
+
+const THEORY_PROB = (function(){
+  const c = [0,0,0,0];
+  for (let s = 0; s <= 27; s++) c[groupOf(s)] += SUM_COUNTS[s];
+  return c.map(v => v / 1000);
+})();
+
+const SUM_BINS = [[0,3],[4,7],[8,11],[12,15],[16,19],[20,23],[24,27]];
+const BIN_COVER = [
+  [2,2,2,1,0,0,0],
+  [2,2,2,1,0,0,0],
+  [0,0,0,1,2,2,2],
+  [0,0,0,1,2,2,2]
+];
+
+const ROLL_W = 30;
+const N_LEARNERS = 30;
+const EMA_ALPHA = 0.1;
+
+const $ = id => document.getElementById(id);
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, ch =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
+
+function pct(v, d){ return (v * 100).toFixed(d === undefined ? 2 : d) + '%'; }
+
+let rngState = 20240922;
+function rng(){
+  rngState = (rngState * 1103515245 + 12345) & 0x7fffffff;
+  return rngState / 0x7fffffff;
+}
+
+/* ============================ B. IndexedDB 记忆库模块 ============================ */
+
+const DB_NAME = 'PC28PredictorDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'history';
+
+let _db = null;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    if (_db) { resolve(_db); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)){
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'nbr' });
+        store.createIndex('nbr_idx', 'nbr', { unique: true });
+      }
+    };
+    req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function getAll(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const arr = req.result || [];
+      arr.sort((a, b) => {
+        const na = Number(a.nbr), nb = Number(b.nbr);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return String(a.nbr).localeCompare(String(b.nbr));
+      });
+      resolve(arr);
+    };
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function putMany(records){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    let added = 0;
+
+    records.forEach(rec => {
+      const checkReq = store.get(rec.nbr);
+      checkReq.onsuccess = () => {
+        if (checkReq.result === undefined){
+          store.put({
+            nbr:         String(rec.nbr),
+            date:        String(rec.date || ''),
+            time:        String(rec.time || ''),
+            number:      String(rec.number || ''),
+            num:         parseInt(rec.num, 10) || 0,
+            combination: String(rec.combination || '')
+          });
+          added++;
+        }
+      };
+    });
+
+    tx.oncomplete = () => resolve(added);
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function count(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function clear(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function trim(maxCount){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const countReq = store.count();
+
+    countReq.onsuccess = () => {
+      const total = countReq.result;
+      if (total <= maxCount){ resolve(0); return; }
+      const excess = total - maxCount;
+      let deleted = 0;
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor || deleted >= excess){ resolve(deleted); return; }
+        cursor.delete();
+        deleted++;
+        cursor.continue();
+      };
+      cursorReq.onerror = (e) => reject(e.target.error);
+    };
+    countReq.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/* ============================ C. 自适应集成学习模型模块 ============================ */
+
+const model = {
+  learners: [],
+  results: [],
+  lastPredict: null
+};
+
+function initLearners(){
+  const N_OPTS   = [3, 5, 7, 10, 15, 20];
+  const ETA_OPTS = [0.01, 0.05, 0.1, 0.2, 0.5];
+  const K_OPTS   = [0.2, 0.5, 1.0];
+
+  model.learners = [];
+  for (let i = 0; i < N_LEARNERS; i++){
+    const N   = N_OPTS[Math.floor(rng() * N_OPTS.length)];
+    const eta = ETA_OPTS[Math.floor(rng() * ETA_OPTS.length)];
+    const k   = K_OPTS[Math.floor(rng() * K_OPTS.length)];
+    let mask  = 0;
+    while (mask === 0) mask = Math.floor(rng() * 64);
+
+    model.learners.push({
+      id: i, N, eta, k, mask,
+      W: [[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1]],
+      ema: 0.5,
+      scores: [0, 0, 0, 0],
+      kill1: 0, kill2: 1
+    });
+  }
+}
+
+function buildFeatures(records){
+  const n = records.length;
+  const groups = new Array(n);
+  const sums   = new Array(n);
+  for (let i = 0; i < n; i++){
+    groups[i] = GROUP_IDX[records[i].combination];
+    if (groups[i] === undefined) groups[i] = 0;
+    sums[i] = records[i].num;
+  }
+
+  const prefix = [];
+  for (let g = 0; g < 4; g++){
+    const arr = new Int32Array(n + 1);
+    for (let i = 0; i < n; i++) arr[i + 1] = arr[i] + (groups[i] === g ? 1 : 0);
+    prefix.push(arr);
+  }
+
+  const missArr = new Int16Array(n * 4);
+  const lastSeen = [-1, -1, -1, -1];
+  for (let i = 0; i < n; i++){
+    for (let g = 0; g < 4; g++){
+      missArr[i * 4 + g] = lastSeen[g] >= 0 ? (i - 1 - lastSeen[g]) : i;
+    }
+    lastSeen[groups[i]] = i;
+  }
+
+  const streakArr = new Float32Array(n * 4);
+  for (let i = 3; i < n; i++){
+    const g1 = groups[i-3], g2 = groups[i-2], g3 = groups[i-1];
+    const b1 = g1 >= 2 ? 1 : 0, b2 = g2 >= 2 ? 1 : 0, b3 = g3 >= 2 ? 1 : 0;
+    const o1 = (g1===0||g1===2)?1:0, o2 = (g2===0||g2===2)?1:0, o3 = (g3===0||g3===2)?1:0;
+    const bigStreak = (b1 === b2 && b2 === b3) ? b1 : -1;
+    const oddStreak = (o1 === o2 && o2 === o3) ? o1 : -1;
+    for (let g = 0; g < 4; g++){
+      const gb = g >= 2 ? 1 : 0;
+      const go = (g === 0 || g === 2) ? 1 : 0;
+      let s = 0;
+      if (bigStreak >= 0 && gb === bigStreak) s++;
+      if (oddStreak >= 0 && go === oddStreak) s++;
+      streakArr[i * 4 + g] = s;
+    }
+  }
+
+  const transArr = new Float32Array(n * 4);
+  const trans = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  const SMOOTH = 5;
+  for (let i = 1; i < n; i++){
+    const prev = groups[i - 1];
+    const rowSum = trans[prev][0] + trans[prev][1] + trans[prev][2] + trans[prev][3];
+    const invDen = 1 / (rowSum + SMOOTH);
+    for (let g = 0; g < 4; g++){
+      transArr[i * 4 + g] = (trans[prev][g] + SMOOTH * THEORY_PROB[g]) * invDen;
+    }
+    trans[groups[i - 1]][groups[i]]++;
+  }
+
+  const heatArr = new Float32Array(n * 4);
+  for (let i = 1; i < n; i++){
+    const w10 = Math.min(10, i);
+    const binCnt = [0,0,0,0,0,0,0];
+    for (let j = i - w10; j < i; j++){
+      const s = sums[j];
+      for (let b = 0; b < 7; b++){
+        if (s >= SUM_BINS[b][0] && s <= SUM_BINS[b][1]){ binCnt[b]++; break; }
+      }
+    }
+    const invW10 = 1 / w10;
+    for (let g = 0; g < 4; g++){
+      let num = 0, den = 0;
+      for (let b = 0; b < 7; b++){
+        num += BIN_COVER[g][b] * (binCnt[b] * invW10);
+        den += BIN_COVER[g][b];
+      }
+      heatArr[i * 4 + g] = den > 0 ? num / den : 0;
+    }
+  }
+
+  return { n, groups, sums, prefix, missArr, streakArr, transArr, heatArr };
+}
+
+function runModel(records){
+  const n = records.length;
+
+  if (n < 35){
+    return { results: [], lastPredict: null };
+  }
+
+  const F = buildFeatures(records);
+
+  model.learners.forEach(L => {
+    L.W = [[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1]];
+    L.ema = 0.5;
+    L.scores = [0, 0, 0, 0];
+  });
+
+  const WARMUP = 30;
+  const results = [];
+  const featBuf = [[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]];
+
+  for (let i = WARMUP; i < n; i++){
+    const actual = F.groups[i];
+
+    for (let li = 0; li < N_LEARNERS; li++){
+      const L = model.learners[li];
+      const m = L.mask;
+
+      const s1 = Math.max(0, i - L.N);
+      const invLen1 = 1 / (i - s1);
+      const s2 = Math.max(0, i - 20);
+      const invLen2 = 1 / (i - s2);
+
+      for (let g = 0; g < 4; g++){
+        featBuf[g][0] = (F.prefix[g][i] - F.prefix[g][s1]) * invLen1 - 0.25;
+        featBuf[g][1] = (F.prefix[g][i] - F.prefix[g][s2]) * invLen2 - 0.25;
+        featBuf[g][2] = 1 / (1 + Math.exp(-L.k * (F.missArr[i * 4 + g] - 5)));
+        featBuf[g][3] = F.streakArr[i * 4 + g];
+        featBuf[g][4] = F.transArr[i * 4 + g];
+        featBuf[g][5] = F.heatArr[i * 4 + g];
+      }
+
+      const W0 = L.W[0], W1 = L.W[1], W2 = L.W[2], W3 = L.W[3];
+      let s0 = 0, sc1 = 0, sc2 = 0, sc3 = 0;
+      for (let f = 0; f < 6; f++){
+        if (!(m & (1 << f))) continue;
+        s0  += W0[f] * featBuf[0][f];
+        sc1 += W1[f] * featBuf[1][f];
+        sc2 += W2[f] * featBuf[2][f];
+        sc3 += W3[f] * featBuf[3][f];
+      }
+      L.scores[0] = s0; L.scores[1] = sc1; L.scores[2] = sc2; L.scores[3] = sc3;
+
+      let lk1 = 0;
+      if (sc1 > s0) lk1 = 1;
+      if (sc2 > L.scores[lk1]) lk1 = 2;
+      if (sc3 > L.scores[lk1]) lk1 = 3;
+      let lk2 = (lk1 === 0) ? 1 : 0;
+      for (let g = 0; g < 4; g++){
+        if (g === lk1) continue;
+        if (L.scores[g] > L.scores[lk2]) lk2 = g;
+      }
+      L.kill1 = lk1; L.kill2 = lk2;
+
+      const hitA_L = (actual !== lk1) ? 1 : 0;
+      if (hitA_L === 0){
+        const Wk = L.W[lk1];
+        const Fk = featBuf[lk1];
+        for (let f = 0; f < 6; f++){
+          if (!(m & (1 << f))) continue;
+          const killVal = Fk[f];
+          let sumO = 0;
+          for (let g = 0; g < 4; g++) if (g !== lk1) sumO += featBuf[g][f];
+          const avgO = sumO / 3;
+          if (killVal > avgO){
+            Wk[f] -= L.eta;
+            if (Wk[f] < 0.1) Wk[f] = 0.1;
+          }
+        }
+      }
+    }
+
+    let S0 = 0, S1 = 0, S2 = 0, S3 = 0;
+    for (let li = 0; li < N_LEARNERS; li++){
+      const L = model.learners[li];
+      const e = L.ema;
+      const w = e * e * e * e;
+      S0 += w * L.scores[0];
+      S1 += w * L.scores[1];
+      S2 += w * L.scores[2];
+      S3 += w * L.scores[3];
+    }
+    const S_ens = [S0, S1, S2, S3];
+
+    let eK1 = 0;
+    for (let g = 1; g < 4; g++) if (S_ens[g] > S_ens[eK1]) eK1 = g;
+    let eK2 = (eK1 === 0) ? 1 : 0;
+    for (let g = 0; g < 4; g++){
+      if (g === eK1) continue;
+      if (S_ens[g] > S_ens[eK2]) eK2 = g;
+    }
+
+    const hitA = (actual !== eK1) ? 1 : 0;
+    const hitB = (actual !== eK1 && actual !== eK2) ? 1 : 0;
+
+    for (let li = 0; li < N_LEARNERS; li++){
+      const L = model.learners[li];
+      const hitA_L = (actual !== L.kill1) ? 1 : 0;
+      L.ema = (1 - EMA_ALPHA) * L.ema + EMA_ALPHA * hitA_L;
+    }
+
+    results.push({
+      nbr: records[i].nbr,
+      combination: records[i].combination,
+      actual,
+      kill1: eK1, kill2: eK2,
+      hitA, hitB,
+      S_ens: S_ens.slice()
+    });
+  }
+
+  model.results = results;
+
+  let lastPredict = null;
+  if (n >= WARMUP + 1){
+    const i = n;
+    const featBuf2 = [[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]];
+
+    for (let li = 0; li < N_LEARNERS; li++){
+      const L = model.learners[li];
+      const m = L.mask;
+      const s1 = Math.max(0, i - L.N);
+      const invLen1 = 1 / (i - s1);
+      const s2 = Math.max(0, i - 20);
+      const invLen2 = 1 / (i - s2);
+
+      for (let g = 0; g < 4; g++){
+        featBuf2[g][0] = (F.prefix[g][i] - F.prefix[g][s1]) * invLen1 - 0.25;
+        featBuf2[g][1] = (F.prefix[g][i] - F.prefix[g][s2]) * invLen2 - 0.25;
+        featBuf2[g][2] = 1 / (1 + Math.exp(-L.k * (F.missArr[i * 4 + g] - 5)));
+        featBuf2[g][3] = F.streakArr[i * 4 + g];
+        featBuf2[g][4] = F.transArr[i * 4 + g];
+        featBuf2[g][5] = F.heatArr[i * 4 + g];
+      }
+
+      const W0 = L.W[0], W1 = L.W[1], W2 = L.W[2], W3 = L.W[3];
+      let s0 = 0, sc1 = 0, sc2 = 0, sc3 = 0;
+      for (let f = 0; f < 6; f++){
+        if (!(m & (1 << f))) continue;
+        s0  += W0[f] * featBuf2[0][f];
+        sc1 += W1[f] * featBuf2[1][f];
+        sc2 += W2[f] * featBuf2[2][f];
+        sc3 += W3[f] * featBuf2[3][f];
+      }
+      L.scores[0] = s0; L.scores[1] = sc1; L.scores[2] = sc2; L.scores[3] = sc3;
+    }
+
+    let S0 = 0, S1 = 0, S2 = 0, S3 = 0;
+    for (let li = 0; li < N_LEARNERS; li++){
+      const L = model.learners[li];
+      const e = L.ema;
+      const w = e * e * e * e;
+      S0 += w * L.scores[0];
+      S1 += w * L.scores[1];
+      S2 += w * L.scores[2];
+      S3 += w * L.scores[3];
+    }
+    const S_ens = [S0, S1, S2, S3];
+
+    let eK1 = 0;
+    for (let g = 1; g < 4; g++) if (S_ens[g] > S_ens[eK1]) eK1 = g;
+    let eK2 = (eK1 === 0) ? 1 : 0;
+    for (let g = 0; g < 4; g++){
+      if (g === eK1) continue;
+      if (S_ens[g] > S_ens[eK2]) eK2 = g;
+    }
+
+    const sorted = S_ens.slice().sort((a, b) => b - a);
+    const totalS = Math.abs(S_ens[0]) + Math.abs(S_ens[1]) + Math.abs(S_ens[2]) + Math.abs(S_ens[3]) || 1;
+    const confA = Math.min(1, Math.max(0, (sorted[0] - sorted[1]) / (totalS * 0.5 + 0.001)));
+    const confB = Math.min(1, Math.max(0, (sorted[0] + sorted[1] - sorted[2] - sorted[3]) / (totalS * 0.8 + 0.001)));
+
+    const lastNbr = Number(records[n - 1].nbr);
+    const nextNbr = isNaN(lastNbr) ? '?' : String(lastNbr + 1);
+
+    lastPredict = {
+      nextNbr,
+      kill1: eK1, kill2: eK2,
+      buyA: [0,1,2,3].filter(g => g !== eK1),
+      buyB: [0,1,2,3].filter(g => g !== eK1 && g !== eK2),
+      confA, confB,
+      scores: S_ens
+    };
+  }
+
+  model.lastPredict = lastPredict;
+
+  const hitsA = results.reduce((a, r) => a + r.hitA, 0);
+  const hitsB = results.reduce((a, r) => a + r.hitB, 0);
+  console.log(`[Model] 回测完成：${results.length} 期，方案 A 命中 ${hitsA}，方案 B 命中 ${hitsB}`);
+
+  return { results, lastPredict };
+}
+
+/* ============================ D. UI 渲染模块 ============================ */
+
+function updateTopbar(memCount, countdown){
+  $('memCount').textContent = memCount;
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  $('clock').textContent =
+    `${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  if (countdown !== undefined && countdown !== null){
+    $('countdown').textContent = countdown;
+  }
+}
+
+function showErr(msg){
+  $('errMsg').textContent = msg;
+  $('errTip').classList.remove('hidden');
+  $('statusDot').classList.add('err');
+}
+function hideErr(){
+  $('errTip').classList.add('hidden');
+  $('statusDot').classList.remove('err');
+}
+
+/** 开奖与下期预测表格 */
+function renderLatest(records, lastPredict){
+  const body = $('latestBody');
+  if (!records || records.length === 0){
+    body.innerHTML = '<tr><td colspan="6" style="color:#94a3b8;padding:14px;">暂无数据</td></tr>';
+    return;
+  }
+
+  const latest = records[records.length - 1];
+  const g = GROUP_IDX[latest.combination];
+  const gTag = (g !== undefined)
+    ? `<span class="tag g${g}">${esc(latest.combination)}</span>`
+    : esc(latest.combination);
+  const latestTime = `${latest.date || ''} ${latest.time || ''}`.trim() || '—';
+
+  const nextNbr = lastPredict ? lastPredict.nextNbr : '—';
+
+  body.innerHTML = `
+    <tr>
+      <td class="row-label latest">最新开奖</td>
+      <td>${esc(latestTime)}</td>
+      <td class="mono">${esc(latest.nbr)}</td>
+      <td class="mono">${esc(latest.number)}</td>
+      <td class="num">${latest.num}</td>
+      <td>${gTag}</td>
+    </tr>
+    <tr>
+      <td class="row-label predict">下期预测</td>
+      <td style="color:#94a3b8;">待开奖</td>
+      <td class="mono" style="color:#2563eb;">${esc(String(nextNbr))}</td>
+      <td style="color:#cbd5e1;">—</td>
+      <td style="color:#cbd5e1;">—</td>
+      <td style="color:#cbd5e1;">—</td>
+    </tr>
+  `;
+}
+
+/** 下期预测卡片 */
+function renderPredict(lastPredict){
+  if (!lastPredict){
+    $('killA').textContent = '—';
+    $('buyA').innerHTML = '<span>—</span>';
+    $('confA').textContent = '—';
+    $('killB').textContent = '—';
+    $('buyB').innerHTML = '<span>—</span>';
+    $('confB').textContent = '—';
+    return;
+  }
+
+  const p = lastPredict;
+
+  $('killA').textContent = GROUP_NAMES[p.kill1];
+  $('buyA').innerHTML = p.buyA.map(g => `<span>${GROUP_NAMES[g]}</span>`).join('');
+  $('confA').textContent = (p.confA * 100).toFixed(1) + '%';
+
+  $('killB').textContent = `${GROUP_NAMES[p.kill1]} + ${GROUP_NAMES[p.kill2]}`;
+  $('buyB').innerHTML = p.buyB.map(g => `<span>${GROUP_NAMES[g]}</span>`).join('');
+  $('confB').textContent = (p.confB * 100).toFixed(1) + '%';
+
+  $('predictIssueHint').textContent = `预测期号：${p.nextNbr}`;
+}
+
+/**
+ * 最近 50 期明细表
+ * 列：开奖时间(日期在上、时间在下)| 期号 | 开奖号码 | 和值 | 实际组合 | 预测结果 | 对错
+ *   · 预测结果列：上行 = 方案A 杀组(1个)；下行 = 方案B 杀组(2个，含A杀的)
+ *   · 对错列：上行 = 方案A 是否命中；下行 = 方案B 是否命中
+ */
+function renderDetail(records, results){
+  const body = $('detailBody');
+  if (!records || records.length === 0){
+    body.innerHTML = '<tr><td colspan="7" style="color:#94a3b8;padding:14px;">暂无数据</td></tr>';
+    return;
+  }
+
+  const resultMap = new Map();
+  results.forEach(r => resultMap.set(String(r.nbr), r));
+
+  const rows = records.slice(-50).reverse();
+
+  body.innerHTML = rows.map(r => {
+    const res = resultMap.get(String(r.nbr));
+    const g = GROUP_IDX[r.combination];
+    const gTag = (g !== undefined)
+      ? `<span class="tag g${g}">${esc(r.combination)}</span>`
+      : esc(r.combination);
+
+    // ---- 预测结果 & 对错(上下两行) ----
+    let predHtml   = '<span style="color:#cbd5e1;">—</span>';
+    let resultHtml = '<span style="color:#cbd5e1;">—</span>';
+    let rowCls = '';
+
+    if (res){
+      // 预测结果：上行杀组，下行双组
+      predHtml = `
+        <div class="pred-result">
+          <div class="pred-top">
+            <span class="tag g${res.kill1}">${GROUP_NAMES[res.kill1]}</span>
+          </div>
+          <div class="pred-bottom">
+            <span class="tag g${res.kill1}">${GROUP_NAMES[res.kill1]}</span>
+            <span class="tag g${res.kill2}">${GROUP_NAMES[res.kill2]}</span>
+          </div>
+        </div>
+      `;
+
+      // 对错：上行方案 A，下行方案 B
+      const resultA = res.hitA
+        ? '<span class="result-ok">✓ 对</span>'
+        : '<span class="result-fail">✗ 错</span>';
+      const resultB = res.hitB
+        ? '<span class="result-ok">✓ 对</span>'
+        : '<span class="result-fail">✗ 错</span>';
+      resultHtml = `
+        <div class="pred-result">
+          <div class="pred-top">${resultA}</div>
+          <div class="pred-bottom">${resultB}</div>
+        </div>
+      `;
+
+      // 行背景：A错优先标红，仅B错标浅蓝
+      if (!res.hitA)        rowCls = 'class="miss"';
+      else if (!res.hitB)   rowCls = 'class="missB"';
+    }
+
+    return `<tr ${rowCls}>
+      <td class="time-cell">
+        <div class="date">${esc(r.date || '—')}</div>
+        <div class="time">${esc(r.time || '')}</div>
+      </td>
+      <td class="mono">${esc(r.nbr)}</td>
+      <td class="mono">${esc(r.number)}</td>
+      <td class="num">${r.num}</td>
+      <td>${gTag}</td>
+      <td>${predHtml}</td>
+      <td>${resultHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+/** 全量刷新 UI */
+function refreshUI(records){
+  renderLatest(records, model.lastPredict);
+  renderPredict(model.lastPredict);
+  renderDetail(records, model.results);
+}
+
+/* ============================ E. 数据同步与轮询模块 ============================ */
+
+const API_URL = 'https://pc28.help/api/kj.json?nbr=80';
+const POLL_INTERVAL = 30000;
+const MAX_RECORDS = 10000;
+
+let _pollTimer = null;
+
+function fetchFromAPI(){
+  return fetch(API_URL, { cache: 'no-store' })
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then(json => {
+      if (!json || !Array.isArray(json.data)){
+        throw new Error('接口返回格式异常');
+      }
+      const records = json.data.slice().reverse().map(item => ({
+        nbr:         String(item.nbr || ''),
+        date:        String(item.date || ''),
+        time:        String(item.time || ''),
+        number:      String(item.number || ''),
+        num:         parseInt(item.num, 10) || 0,
+        combination: String(item.combination || '')
+      })).filter(r => r.nbr && r.combination);
+      return { records, countdown: json.countdown || null };
+    });
+}
+
+async function syncAndPredict(){
+  try {
+    const { records: remote, countdown } = await fetchFromAPI();
+    hideErr();
+
+    const added = await putMany(remote);
+    if (added > 0) console.log(`[Sync] 新增 ${added} 期`);
+
+    await trim(MAX_RECORDS);
+
+    const all = await getAll();
+    runModel(all);
+
+    updateTopbar(all.length, countdown);
+    refreshUI(all);
+
+  } catch (err){
+    console.error('[Sync] 失败', err);
+    showErr('接口异常，使用本地数据');
+
+    const all = await getAll();
+    if (all.length > 0){
+      runModel(all);
+      updateTopbar(all.length, null);
+      refreshUI(all);
+    }
+  }
+}
+
+function startPolling(){
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(() => { syncAndPredict(); }, POLL_INTERVAL);
+  console.log(`[Poll] 已启动，间隔 ${POLL_INTERVAL / 1000} 秒`);
+}
+
+/* ============================ F. 启动流程 ============================ */
+
+async function init(){
+  console.log('%cPC28 实时预测系统 v12', 'color:#2563eb;font-size:15px;font-weight:700;');
+  console.log('正在初始化…');
+
+  try {
+    await openDB();
+    initLearners();
+
+    const cnt = await count();
+    console.log(`[Init] 本地记录 ${cnt} 期`);
+
+    if (cnt === 0){
+      console.log('[Init] 首次运行，从接口获取数据…');
+      try {
+        const { records, countdown } = await fetchFromAPI();
+        await putMany(records);
+        const all = await getAll();
+        console.log(`[Init] 已写入 ${all.length} 期`);
+
+        runModel(all);
+        updateTopbar(all.length, countdown);
+        refreshUI(all);
+
+      } catch (err){
+        console.error('[Init] 接口失败', err);
+        showErr('接口异常，使用本地数据');
+        updateTopbar(0, null);
+        $('latestBody').innerHTML = '<tr><td colspan="6" style="color:#ef4444;padding:14px;">无法获取数据，请检查网络后刷新</td></tr>';
+      }
+
+    } else {
+      const all = await getAll();
+      runModel(all);
+      updateTopbar(all.length, null);
+      refreshUI(all);
+    }
+
+    startPolling();
+
+    setInterval(() => {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      $('clock').textContent =
+        `${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }, 1000);
+
+    console.log('[Init] 初始化完成');
+
+  } catch (err){
+    console.error('[Init] 致命错误', err);
+    showErr('初始化失败：' + err.message);
+  }
+}
+
+$('refreshBtn').addEventListener('click', async () => {
+  $('refreshBtn').disabled = true;
+  $('refreshBtn').textContent = '刷新中…';
+  await syncAndPredict();
+  $('refreshBtn').disabled = false;
+  $('refreshBtn').textContent = '立即刷新';
+});
+
+init();
+
+console.log('%cPC28 实时预测系统 v12', 'color:#2563eb;font-size:13px;font-weight:700;');
+console.log('本地记忆库：IndexedDB · 模型：自适应集成学习(30 基学习器)');
+</script>
+</body>
+</html>
